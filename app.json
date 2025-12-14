@@ -1,0 +1,42 @@
+{
+  "expo": {
+    "name": "digitqc-user-app",
+    "slug": "digitqc-user-app",
+    "scheme": "digitqc-user-app",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/digiqc-logo.png",
+    "userInterfaceStyle": "light",
+    "notification": {
+      "icon": "./assets/favicon.png",
+      "color": "#ffffff"
+    },
+    "newArchEnabled": true,
+    "splash": {
+      "image": "./assets/digiqc-logo.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#ffffff"
+    },
+    "ios": {
+      "supportsTablet": true
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/digiqc-logo.png",
+        "backgroundColor": "#ffffff"
+      },
+      "edgeToEdgeEnabled": true,
+      "predictiveBackGestureEnabled": false,
+      "package": "com.seaducktechnology.digitqcuserapp"
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "plugins": [],
+    "extra": {
+      "eas": {
+        "projectId": "751f503f-a97b-495d-b42c-f09a228f2713"
+      }
+    }
+  }
+}
