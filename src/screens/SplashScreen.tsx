@@ -3,6 +3,7 @@ import React, { useEffect } from "react";
 import { Image, StyleSheet, View } from "react-native";
 import { RootStackParamList } from "../types/navigation";
 import { AuthService } from "../services/AuthService";
+import { registerForPushNotificationsAsync } from "../services/NotificationService";
 
 type Props = {
     navigation: StackNavigationProp<RootStackParamList, "Splash">;
@@ -11,13 +12,20 @@ type Props = {
 export default function SplashScreen({ navigation }: Props) {
     useEffect(() => {
         const checkAuth = async () => {
-            // Artificial delay for splash effect
             await new Promise(resolve => setTimeout(resolve, 1400));
+            try {
+                const user = await AuthService.loadSession();
 
-            const isAuthenticated = AuthService.isAuthenticated();
-            if (isAuthenticated) {
-                navigation.replace("Main");
-            } else {
+                if (user) {
+                    if (user.id) {
+                        registerForPushNotificationsAsync(user.id).catch(err => console.error("Push Reg Failed", err));
+                    }
+                    navigation.replace("Main");
+                } else {
+                    navigation.replace("Intro");
+                }
+            } catch (error) {
+                console.error("Session load failed", error);
                 navigation.replace("Intro");
             }
         };

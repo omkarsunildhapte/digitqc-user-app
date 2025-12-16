@@ -11,8 +11,9 @@ import { useToast } from "../context/ToastContext";
 import { RootStackParamList } from "../types/navigation";
 
 import { useNetInfo } from "@react-native-community/netinfo";
-import { ImageAnnotationModal } from "../components/common/ImageAnnotationModal";
+
 import { InspectionService } from "../services/InspectionService";
+import { ImageAnnotationModal } from "../components/common/ImageAnnotationModal";
 
 const STEPS = ["Setup", "Collaborators", "Drawings", "Checklist", "Completion"];
 const CHECKLIST_TYPES = ["Structural", "Finishing", "Safety", "Electrical", "Plumbing"];
@@ -61,6 +62,11 @@ export default function InspectionFormScreen() {
     const [hasDiagram, setHasDiagram] = useState<boolean | null>(null);
     const [diagramImage, setDiagramImage] = useState<string | null>(null);
 
+    // Annotation State
+    const [annotationModalVisible, setAnnotationModalVisible] = useState(false);
+    const [tempImageUri, setTempImageUri] = useState<string | null>(null);
+    const [annotationType, setAnnotationType] = useState<'proof' | 'diagram' | null>(null);
+
 
     const toggleRole = (role: string) => {
         if (selectedRole === role) {
@@ -87,9 +93,7 @@ export default function InspectionFormScreen() {
     const [showDatePicker, setShowDatePicker] = useState(false);
     const [mode, setMode] = useState<'date' | 'time'>('date');
 
-    // Annotation State
-    const [annotationModalVisible, setAnnotationModalVisible] = useState(false);
-    const [tempImageUri, setTempImageUri] = useState<string | null>(null);
+
 
     const handleNext = () => {
         if (currentStep === 0) {
@@ -315,25 +319,21 @@ export default function InspectionFormScreen() {
     const processImageResult = (result: ImagePicker.ImagePickerResult, type: 'proof' | 'diagram') => {
         if (!result.canceled) {
             const uri = result.assets[0].uri;
-            // Immediate Annotation for both types
             setTempImageUri(uri);
-            // We need to know WHAT we are annotating (Diagram or Proof) to save correctly.
-            // Using a ref or state for 'annotationTarget' would be cleaner, but let's reuse activeQuestion for Proofs.
-            // For Diagram, activeQuestion is null.
+            setAnnotationType(type);
             setAnnotationModalVisible(true);
         }
     };
 
-    const handleAnnotationSave = (newUri: string) => {
-        if (activeQuestion) {
-            // It was a Proof
-            setActiveQuestion({ ...activeQuestion, proof: newUri });
-        } else {
-            // It must be the Diagram
-            setDiagramImage(newUri);
+    const handleAnnotationSave = (uri: string) => {
+        if (annotationType === 'diagram') {
+            setDiagramImage(uri);
+        } else if (annotationType === 'proof' && activeQuestion) {
+            setActiveQuestion({ ...activeQuestion, proof: uri });
         }
         setAnnotationModalVisible(false);
         setTempImageUri(null);
+        setAnnotationType(null);
     };
 
     const openQuestionModal = (q: Question) => {
@@ -523,17 +523,7 @@ export default function InspectionFormScreen() {
                                 <View className="w-full h-full relative">
                                     <Image source={{ uri: diagramImage }} className="w-full h-full" resizeMode="contain" />
                                     <View className="absolute bottom-2 right-2 flex-row gap-2">
-                                        <TouchableOpacity
-                                            onPress={() => {
-                                                setTempImageUri(diagramImage);
-                                                setActiveQuestion(null); // Ensure target is Diagram
-                                                setAnnotationModalVisible(true);
-                                            }}
-                                            className="bg-white/90 p-2 rounded-lg shadow-sm flex-row items-center"
-                                        >
-                                            <Edit2 size={16} color="#4B5563" />
-                                            <Text className="ml-1 text-xs font-bold text-gray-800">Edit/Annotate</Text>
-                                        </TouchableOpacity>
+
                                         <TouchableOpacity
                                             onPress={() => pickImage('diagram')}
                                             className="bg-white/90 p-2 rounded-lg shadow-sm flex-row items-center"
@@ -585,32 +575,59 @@ export default function InspectionFormScreen() {
                     </View>
                 );
             case 4: // Completion (Recheck Time)
+                // Logic: Check if any question has a "negative" answer
+                const hasFailures = questions.some(q =>
+                    q.answer === 'Fail' || q.answer === 'No' || q.answer === 'Rejected' || q.answer === false
+                );
+
                 return (
                     <View>
                         <Text className="text-lg font-semibold text-gray-800 mb-4">Finalization</Text>
-                        <Text className="text-gray-600 mb-6">Please schedule a rechecking time for verification.</Text>
 
-                        <View className="flex-row gap-4">
-                            <TouchableOpacity
-                                onPress={showDatepicker}
-                                className="flex-1 bg-white border border-gray-300 p-4 rounded-xl flex-row items-center justify-center"
-                            >
-                                <Calendar size={20} color="#4B5563" />
-                                <Text className="ml-2 font-semibold text-gray-700">
-                                    {recheckingDate ? recheckingDate.toLocaleDateString() : "Select Date"}
-                                </Text>
-                            </TouchableOpacity>
+                        {hasFailures ? (
+                            <>
+                                <View className="bg-red-50 p-4 rounded-xl border border-red-100 mb-6">
+                                    <Text className="text-red-800 font-bold mb-1">Issues Detected</Text>
+                                    <Text className="text-red-600 text-sm">
+                                        Some items were marked as failed or rejected. Please schedule a mandatory rechecking time.
+                                    </Text>
+                                </View>
 
-                            <TouchableOpacity
-                                onPress={showTimepicker}
-                                className="flex-1 bg-white border border-gray-300 p-4 rounded-xl flex-row items-center justify-center"
-                            >
-                                <Clock size={20} color="#4B5563" />
-                                <Text className="ml-2 font-semibold text-gray-700">
-                                    {recheckingDate ? recheckingDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : "Select Time"}
-                                </Text>
-                            </TouchableOpacity>
-                        </View>
+                                <Text className="text-gray-600 mb-2 font-semibold">Rechecking Schedule <Text className="text-red-500">*</Text></Text>
+                                <View className="flex-row gap-4 mb-6">
+                                    <TouchableOpacity
+                                        onPress={showDatepicker}
+                                        className={`flex-1 bg-white border p-4 rounded-xl flex-row items-center justify-center ${!recheckingDate ? 'border-red-300' : 'border-gray-300'}`}
+                                    >
+                                        <Calendar size={20} color="#4B5563" />
+                                        <Text className="ml-2 font-semibold text-gray-700">
+                                            {recheckingDate ? recheckingDate.toLocaleDateString() : "Select Date"}
+                                        </Text>
+                                    </TouchableOpacity>
+
+                                    <TouchableOpacity
+                                        onPress={showTimepicker}
+                                        className={`flex-1 bg-white border p-4 rounded-xl flex-row items-center justify-center ${!recheckingDate ? 'border-red-300' : 'border-gray-300'}`}
+                                    >
+                                        <Clock size={20} color="#4B5563" />
+                                        <Text className="ml-2 font-semibold text-gray-700">
+                                            {recheckingDate ? recheckingDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : "Select Time"}
+                                        </Text>
+                                    </TouchableOpacity>
+                                </View>
+                            </>
+                        ) : (
+                            <View className="bg-green-50 p-4 rounded-xl border border-green-100 mb-6 flex-row items-center">
+                                <CheckCircle size={24} color="#15803d" />
+                                <View className="ml-3 flex-1">
+                                    <Text className="text-green-800 font-bold">All Clear!</Text>
+                                    <Text className="text-green-600 text-sm">
+                                        No issues detected. You can submit this inspection immediately.
+                                    </Text>
+                                </View>
+                            </View>
+                        )}
+
 
                         {showDatePicker && (
                             <DateTimePicker
@@ -623,7 +640,7 @@ export default function InspectionFormScreen() {
                             />
                         )}
 
-                        <View className="mt-8 bg-blue-50 p-4 rounded-xl border border-blue-100">
+                        <View className="mt-4 bg-blue-50 p-4 rounded-xl border border-blue-100">
                             <View className="flex-row items-center mb-2">
                                 <CheckCircle size={20} color="#3b82f6" />
                                 <Text className="font-bold text-blue-800 ml-2">Ready to Submit?</Text>
@@ -648,7 +665,7 @@ export default function InspectionFormScreen() {
                 </TouchableOpacity>
                 <View>
                     <Text className="text-lg font-bold text-gray-900 text-center">New Inspection</Text>
-                    <Text className="text-xs text-gray-500 text-center">Step {currentStep + 1} of {STEPS.length}: {STEPS[currentStep]}</Text>
+                    <Text className="text-xs text-gray-500 text-center">Step {currentStep + 1}</Text>
                 </View>
                 <TouchableOpacity onPress={handleCancel} className="p-2">
                     <X size={24} color="#EF4444" />
@@ -746,17 +763,7 @@ export default function InspectionFormScreen() {
                                         {activeQuestion.proof ? (
                                             <View className="w-full h-full relative">
                                                 <Image source={{ uri: activeQuestion.proof }} className="w-full h-full" resizeMode="contain" />
-                                                <TouchableOpacity
-                                                    onPress={() => {
-                                                        setTempImageUri(activeQuestion.proof);
-                                                        // activeQuestion is already set, so handleAnnotationSave will work for proof
-                                                        setAnnotationModalVisible(true);
-                                                    }}
-                                                    className="absolute bottom-2 right-2 bg-white/90 p-2 rounded-lg shadow-sm flex-row items-center"
-                                                >
-                                                    <Edit2 size={16} color="#4B5563" />
-                                                    <Text className="ml-1 text-xs font-bold text-gray-800">Annotate</Text>
-                                                </TouchableOpacity>
+
                                             </View>
                                         ) : (
                                             <View className="items-center">
@@ -818,7 +825,11 @@ export default function InspectionFormScreen() {
             <ImageAnnotationModal
                 visible={annotationModalVisible}
                 imageUri={tempImageUri}
-                onClose={() => setAnnotationModalVisible(false)}
+                onClose={() => {
+                    setAnnotationModalVisible(false);
+                    setTempImageUri(null);
+                    setAnnotationType(null);
+                }}
                 onSave={handleAnnotationSave}
             />
         </SafeAreaView >

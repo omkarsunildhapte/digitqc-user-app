@@ -14,21 +14,77 @@ import {
     PlayCircle
 } from "lucide-react-native";
 import React, { useEffect, useState } from "react";
-import { ActivityIndicator, AppState, Linking, ScrollView, Text, TouchableOpacity, View } from "react-native";
+import { AppState, Linking, ScrollView, Text, TouchableOpacity, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { CircularProgress } from "../components/common/CircularProgress";
+import { Loader } from "../components/common/Loader";
 import { MOCK_INSPECTIONS, PROJECT_ICONS, PROJECTS, TODO_LIST } from "../constants/data";
-import { registerForPushNotificationsAsync } from "../services/NotificationService";
+import { AuthService } from "../services/AuthService";
+import ApiClientService from "../services/ApiClientService";
+import { addNotificationListeners, registerForPushNotificationsAsync } from "../services/NotificationService";
+import { useToast } from "../context/ToastContext";
 
 export default function DashboardScreen() {
     const navigation = useNavigation();
+    const { show: showToast } = useToast();
     const [location, setLocation] = useState<Location.LocationObject | null>(null);
     const [errorMsg, setErrorMsg] = useState<string | null>(null);
     const [isLoading, setIsLoading] = useState(true);
+    const [user, setUser] = useState<any>(null);
 
     useEffect(() => {
-        checkLocationPermission();
-        registerForPushNotificationsAsync();
+        const init = async () => {
+            checkLocationPermission();
+            const u = await AuthService.getUser();
+            if (u) {
+                try {
+                    const parsedUser = typeof u === 'string' ? JSON.parse(u) : u;
+                    let currentUser = parsedUser;
+
+                    // Fetch fresh user data from API
+                    // try {
+                    //     let identifier = parsedUser.phone;
+                    //     let type: 'phone' | 'email' = 'phone';
+                    //     if (identifier) {
+                    //         const res = await ApiClientService.getUserbyIdentifier(identifier, type);
+                    //         if (res.data && res.data.data) {
+                    //             currentUser = res.data.data;
+                    //         }
+                    //     }
+                    // } catch (apiErr) {
+                    //     console.error("Failed to fetch fresh user data", apiErr);
+                    // }
+
+                    setUser(currentUser);
+                    if (currentUser.id) {
+                        try {
+                            await registerForPushNotificationsAsync(currentUser.id);
+                        } catch (err: any) {
+                            console.error("Push Reg Failed", err);
+                            showToast("Push Notification Error: " + (err.message || "Unknown"), "error");
+                        }
+                    }
+                } catch (e) {
+                    console.error("Failed to parse user", e);
+                }
+            }
+            setIsLoading(false);
+        };
+        init();
+
+        const cleanupNotificationListeners = addNotificationListeners(
+            (notification) => {
+                console.log('Notification received in foreground:', notification);
+            },
+            (response) => {
+                console.log('User interacted with notification:', response);
+                const data = response.notification.request.content.data;
+                if (data?.screen) {
+                    // Navigate if data contains screen info
+                    // navigation.navigate(data.screen, data.params);
+                }
+            }
+        );
 
         const subscription = AppState.addEventListener("change", (nextAppState) => {
             if (nextAppState === "active") {
@@ -38,6 +94,7 @@ export default function DashboardScreen() {
 
         return () => {
             subscription.remove();
+            cleanupNotificationListeners();
         };
     }, []);
 
@@ -63,14 +120,6 @@ export default function DashboardScreen() {
     const handleGrantPermission = async () => {
         Linking.openSettings();
     };
-
-    if (isLoading) {
-        return (
-            <View className="flex-1 bg-white justify-center items-center">
-                <ActivityIndicator size="large" color="#2563EB" />
-            </View>
-        );
-    }
 
     if (errorMsg) {
         return (
@@ -143,7 +192,7 @@ export default function DashboardScreen() {
 
     return (
         <View className="flex-1 bg-gray-50">
-            {/* Gradient Header */}
+            <Loader visible={isLoading} />
             <LinearGradient
                 colors={['#2563EB', '#1E40AF']}
                 start={{ x: 0, y: 0 }}
@@ -165,7 +214,9 @@ export default function DashboardScreen() {
                         </TouchableOpacity>
                         <TouchableOpacity onPress={() => navigation.dispatch(DrawerActions.openDrawer())} >
                             <View className="w-10 h-10 bg-white rounded-full items-center justify-center border-2 border-white/30">
-                                <Text className="text-blue-700 font-bold">JD</Text>
+                                <Text className="text-blue-700 font-bold">
+                                    {(user?.first_name?.[0] || "").toUpperCase() + (user?.last_name?.[0] || "").toUpperCase()}
+                                </Text>
                             </View>
                         </TouchableOpacity>
                     </View>

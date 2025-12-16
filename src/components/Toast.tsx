@@ -91,7 +91,7 @@ export const Toast: React.FC<ToastProps> = ({
 
     return (
         <Animated.View
-            className={`absolute left-4 right-4 z-50 rounded-lg shadow-lg flex-row items-center p-4 ${getBackgroundColor()} ${styles}`}
+            className={`absolute left-4 right-4 z-[10000] rounded-lg shadow-lg flex-row items-center p-4 ${getBackgroundColor()} ${styles}`}
             style={{
                 opacity: fadeAnim,
                 transform: [{ translateY }]

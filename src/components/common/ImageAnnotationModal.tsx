@@ -1,7 +1,7 @@
 import React, { useState, useRef } from 'react';
 import { View, Modal, Image, TouchableOpacity, Text, PanResponder, Dimensions, SafeAreaView, ActivityIndicator } from 'react-native';
 import { Svg, Path } from 'react-native-svg';
-import ViewShot from 'react-native-view-shot';
+import { captureRef } from 'react-native-view-shot';
 import { X, Check, Trash2, Undo2 } from 'lucide-react-native';
 
 interface ImageAnnotationModalProps {
@@ -16,13 +16,16 @@ export function ImageAnnotationModal({ visible, imageUri, onClose, onSave }: Ima
     const [currentPath, setCurrentPath] = useState<string>('');
     const [saving, setSaving] = useState(false);
 
-    // ViewShot ref to capture the view
-    const viewShotRef = useRef<ViewShot>(null);
+    // Reset state when imageUri changes
+    React.useEffect(() => {
+        setPaths([]);
+        setCurrentPath('');
+    }, [imageUri]);
+
+    // Ref to capture the view
+    const viewRef = useRef<View>(null);
 
     // Dimensions for the drawing area
-    // We'll try to keep it responsive, but for now fixed aspect or sticking to container size is easier
-    // Let's assume full screen overlay for simplicity or a large modal
-
     const panResponder = useRef(
         PanResponder.create({
             onStartShouldSetPanResponder: () => true,
@@ -56,10 +59,15 @@ export function ImageAnnotationModal({ visible, imageUri, onClose, onSave }: Ima
     };
 
     const handleSave = async () => {
-        if (viewShotRef.current && viewShotRef.current.capture) {
+        if (viewRef.current) {
             setSaving(true);
             try {
-                const uri = await viewShotRef.current.capture();
+                // Use captureRef directly
+                const uri = await captureRef(viewRef, {
+                    format: "jpg",
+                    quality: 0.8,
+                    result: "tmpfile"
+                });
                 onSave(uri);
             } catch (error) {
                 console.error("Failed to save annotation", error);
@@ -103,19 +111,20 @@ export function ImageAnnotationModal({ visible, imageUri, onClose, onSave }: Ima
 
                 {/* Canvas Container */}
                 <View className="flex-1 justify-center items-center bg-black relative">
-                    <ViewShot
-                        // @ts-ignore
-                        ref={viewShotRef}
-                        options={{ format: "jpg", quality: 0.8 }}
+                    <View
+                        ref={viewRef}
                         className="flex-1 w-full h-full relative"
                         collapsable={false}
                     >
                         {/* Background Image - ensure it's visible */}
-                        <Image
-                            source={{ uri: imageUri }}
-                            style={{ position: 'absolute', width: '100%', height: '100%', zIndex: 0 }}
-                            resizeMode="contain"
-                        />
+                        {imageUri && (
+                            <Image
+                                key={imageUri} // Force re-render if URI changes
+                                source={{ uri: imageUri }}
+                                style={{ position: 'absolute', width: '100%', height: '100%', zIndex: 0 }}
+                                resizeMode="contain"
+                            />
+                        )}
 
                         {/* Drawing Layer */}
                         <View
@@ -144,7 +153,7 @@ export function ImageAnnotationModal({ visible, imageUri, onClose, onSave }: Ima
                                 />
                             </Svg>
                         </View>
-                    </ViewShot>
+                    </View>
                 </View>
 
                 {/* Toolbar */}

@@ -6,16 +6,34 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { AuthService } from '../services/AuthService';
 
 export default function CustomDrawerContent(props: any) {
+    const [user, setUser] = React.useState<any>(null);
+
+    React.useEffect(() => {
+        const fetchUser = async () => {
+            const u = await AuthService.getUser();
+            if (u) {
+                try {
+                    setUser(typeof u === 'string' ? JSON.parse(u) : u);
+                } catch (e) {
+                    console.error("Failed to parse user", e);
+                }
+            }
+        };
+        fetchUser();
+    }, []);
+
     return (
         <SafeAreaView className="flex-1 bg-white" edges={["top", "bottom"]}>
             <StatusBar barStyle="dark-content" />
 
             <View className="p-6 border-b border-gray-100 items-center pt-10">
                 <View className="w-20 h-20 bg-blue-100 rounded-full justify-center items-center mb-3">
-                    <Text className="text-2xl font-bold text-blue-600">JD</Text>
+                    <Text className="text-2xl font-bold text-blue-600">
+                        {(user?.first_name?.charAt(0) || "").toUpperCase() + (user?.last_name?.charAt(0) || "").toUpperCase()}
+                    </Text>
                 </View>
-                <Text className="text-lg font-bold text-gray-900">John Doe</Text>
-                <Text className="text-gray-500">john.doe@example.com</Text>
+                <Text className="text-lg font-bold text-gray-900">{user?.first_name + " " + user?.last_name}</Text>
+                <Text className="text-gray-500">{user?.email}</Text>
             </View>
 
             <DrawerContentScrollView {...props} contentContainerStyle={{ paddingTop: 10, flexGrow: 1 }}>
@@ -48,8 +66,7 @@ export default function CustomDrawerContent(props: any) {
                             ]
                         );
                     }}
-                    className="flex-row items-center p-3 mb-2 bg-red-50 rounded-xl justify-center"
-                >
+                    className="flex-row items-center p-3 mb-2 bg-red-50 rounded-xl justify-center">
                     <LogOut size={20} color="#EF4444" />
                     <Text className="text-red-600 font-semibold ml-3">Logout</Text>
                 </TouchableOpacity>
